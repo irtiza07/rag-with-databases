@@ -1,0 +1,103 @@
+# =====================================================================
+#  Local databases for the "Building RAG Apps with ..." tutorials
+# =====================================================================
+#
+#  This ONE file defines all three databases. Each video only starts
+#  the database it needs, by naming the service:
+#
+#     docker compose up -d mongodb     # MongoDB video
+#     docker compose up -d redis       # Redis video
+#     docker compose up -d postgres    # Postgres video
+#
+#  Handy commands (run them from this folder):
+#     docker compose ps                # is it running? wait for "healthy"
+#     docker compose logs -f redis     # watch a database's logs
+#     docker compose stop redis        # stop it (data is kept)
+#     docker compose down              # stop + remove containers (data is kept)
+#     docker compose down -v           # ...and DELETE all stored data (volumes)
+#
+#  What is a "named volume"?
+#     A container's filesystem is thrown away when the container is
+#     removed. A named volume is storage that Docker keeps separately,
+#     so your stored documents and embeddings survive restarts and
+#     "docker compose down". Only "down -v" deletes them.
+# =====================================================================
+
+services:
+
+  # -------------------------------------------------------------------
+  # MongoDB
+  # The "atlas-local" image is MongoDB + Atlas Search running locally.
+  # We need it (instead of the plain "mongo" image) because it supports
+  # vector search indexes and the $vectorSearch query stage.
+  # -------------------------------------------------------------------
+  mongodb:
+    image: mongodb/mongodb-atlas-local:8.0
+    container_name: rag-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db           # your documents
+      - mongodb_config:/data/configdb   # replica set config
+      - mongodb_mongot:/data/mongot     # search / vector index files
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # -------------------------------------------------------------------
+  # Redis
+  # "redis-stack" = Redis + the Query Engine (FT.CREATE / FT.SEARCH),
+  # which gives us vector indexes. It also ships RedisInsight, a web UI
+  # at http://localhost:8001 where you can browse the stored data.
+  # -------------------------------------------------------------------
+  redis:
+    image: redis/redis-stack:7.4.0-v3
+    container_name: rag-redis
+    restart: unless-stopped
+    environment:
+      # Redis keeps data in memory. "appendonly yes" also writes every
+      # change to a log file in /data, so data survives a restart.
+      REDIS_ARGS: "--appendonly yes"
+    ports:
+      - "6379:6379"   # Redis itself
+      - "8001:8001"   # RedisInsight web UI
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # -------------------------------------------------------------------
+  # Postgres
+  # Official Postgres 17 with the "pgvector" extension pre-installed,
+  # which adds a "vector" column type and similarity operators.
+  # -------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rag          # these three values must match
+      POSTGRES_PASSWORD: rag      # the connection settings in
+      POSTGRES_DB: rag_demo       # postgres/db.py
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "rag", "-d", "rag_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  mongodb_mongot:
+  redis_data:
+  postgres_data:

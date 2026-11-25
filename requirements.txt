@@ -1,0 +1,17 @@
+# One requirements file for all three tutorials.
+# Install with:  pip install -r requirements.txt
+
+# --- Shared by every tutorial ---
+openai==3.59.0          # embeddings + answer generation
+python-dotenv==1.2.4    # loads OPENAI_API_KEY from the .env file
+
+# --- MongoDB tutorial ---
+pymongo==4.20.1
+
+# --- Redis tutorial ---
+redis==8.2.0
+numpy==2.5.5            # converts embeddings to the raw bytes Redis stores
+
+# --- Postgres tutorial ---
+psycopg[binary]==3.3.9
+pgvector==0.5.1         # teaches psycopg about the "vector" column type
